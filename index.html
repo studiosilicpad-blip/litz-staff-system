@@ -235,9 +235,13 @@
 
         let currentDecision = { uid: null, status: null };
 
+        // --- REGISTRAR SERVICE WORKER PARA NOTIFICAÇÕES ---
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js').then(() => console.log("SW registrado"));
+        }
+
         // --- SISTEMA DE NOTIFICAÇÃO (SITE + CELULAR) ---
         function notify(msg, type = 'success') {
-            // Notificação interna (Toast)
             const toast = document.getElementById('toast');
             const dot = document.getElementById('t-dot');
             document.getElementById('toast-text').innerText = msg;
@@ -245,16 +249,33 @@
             toast.classList.add('show');
             setTimeout(() => toast.classList.remove('show'), 3500);
 
-            // Notificação do Sistema (Barra de Notificações)
+            // Notificação de Sistema (Via Service Worker para melhor suporte mobile)
             if ("Notification" in window && Notification.permission === "granted") {
-                new Notification("LITZ Staff System", {
-                    body: msg,
-                    icon: "https://cdn-icons-png.flaticon.com/512/1828/1828640.png"
+                navigator.serviceWorker.ready.then(reg => {
+                    reg.showNotification("LITZ Staff System", {
+                        body: msg,
+                        icon: "https://cdn-icons-png.flaticon.com/512/1828/1828640.png",
+                        vibrate: [200, 100, 200]
+                    });
                 });
             }
         }
 
-        // Solicita permissão ao carregar a página
+        // --- MONITORAR MUDANÇAS NO BANCO DE DADOS ---
+        function watchStatusChanges(uid) {
+            const statusRef = rtdb.ref('candidaturas/' + uid + '/status');
+            let initialDataLoaded = false;
+            statusRef.on('value', snapshot => {
+                if (!initialDataLoaded) {
+                    initialDataLoaded = true;
+                    return;
+                }
+                const status = snapshot.val();
+                if (status === 'approved') notify("🎉 Parabéns! Sua candidatura foi APROVADA!", "success");
+                if (status === 'rejected') notify("❌ Sua candidatura foi reprovada. Veja o feedback.", "error");
+            });
+        }
+
         if ("Notification" in window) {
             Notification.requestPermission();
         }
@@ -266,7 +287,6 @@
             document.getElementById('view-' + viewName).classList.remove('hidden');
         }
 
-        // --- MODAIS ---
         function openModal(uid) {
             rtdb.ref('candidaturas/' + uid).once('value').then(snap => {
                 const data = snap.val();
@@ -281,7 +301,6 @@
 
         function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
-        // --- SISTEMA DE DECISÃO ADMIN ---
         window.updateStatus = (uid, status) => {
             currentDecision = { uid: uid, status: status };
             document.getElementById('dec-title').innerText = status === 'approved' ? 'Aprovar Candidato' : 'Reprovar Candidato';
@@ -292,7 +311,6 @@
         async function confirmStatus() {
             const admName = document.getElementById('adm-name').value;
             const admMsg = document.getElementById('adm-msg').value;
-
             if(!admName || !admMsg) return notify("Preencha o nome e a mensagem!", "error");
 
             try {
@@ -307,7 +325,6 @@
             } catch (e) { notify("Erro ao atualizar", "error"); }
         }
 
-        // --- CARREGAMENTO ADMIN ---
         function loadAdmin() {
             rtdb.ref('candidaturas').on('value', snapshot => {
                 const list = document.getElementById('admin-list');
@@ -329,20 +346,16 @@
             });
         }
 
-        // --- STATUS DO USUÁRIO ---
         async function checkStatus(user) {
             rtdb.ref('candidaturas/' + user.uid).on('value', snapshot => {
                 const data = snapshot.val();
                 if (data) {
                     document.getElementById('container-form').classList.add('hidden');
                     document.getElementById('container-status').classList.remove('hidden');
-                    
                     const statusMap = { 'analyzing': '🟡', 'approved': '🟢', 'rejected': '🔴' };
                     const textMap = { 'analyzing': 'Em Análise', 'approved': 'Aprovado!', 'rejected': 'Candidatura Negada' };
-                    
                     document.getElementById('status-icon').innerText = statusMap[data.status] || '🟡';
                     document.getElementById('status-title').innerText = textMap[data.status] || 'Em Análise';
-                    
                     if(data.feedback_admin) {
                         document.getElementById('feedback-display').classList.remove('hidden');
                         document.getElementById('fb-admin-name').innerText = "AVALIADOR: " + data.feedback_admin;
@@ -352,7 +365,6 @@
             });
         }
 
-        // --- AUTH ---
         auth.onAuthStateChanged(async user => {
             if (user) {
                 try {
@@ -361,17 +373,14 @@
                     if (userData && userData.cargo === 'admin') {
                         showView('admin'); loadAdmin();
                     } else {
-                        showView('dashboard'); checkStatus(user);
+                        showView('dashboard'); 
+                        checkStatus(user);
+                        watchStatusChanges(user.uid); // ATIVA O MONITORAMENTO
                     }
-                } catch (e) {
-                    showView('dashboard');
-                }
-            } else { 
-                showView('welcome'); 
-            }
+                } catch (e) { showView('dashboard'); }
+            } else { showView('welcome'); }
         });
 
-        // Form handlers
         document.getElementById('form-register').onsubmit = async (e) => {
             e.preventDefault();
             try {
@@ -386,8 +395,7 @@
             try { 
                 await auth.signInWithEmailAndPassword(document.getElementById('login-email').value, document.getElementById('login-pass').value);
                 notify("Bem-vindo de volta!");
-            }
-            catch (err) { notify("Erro no login", 'error'); }
+            } catch (err) { notify("Erro no login", 'error'); }
         };
 
         document.getElementById('form-application').onsubmit = async (e) => {
@@ -396,12 +404,4 @@
             try {
                 await rtdb.ref('candidaturas/' + user.uid).set({
                     user_id: user.uid, discord: document.getElementById('app-discord').value,
-                    idade: document.getElementById('app-age').value, respostas: document.getElementById('app-reason').value,
-                    status: 'analyzing'
-                });
-                notify("Candidatura enviada para o sistema!");
-            } catch (err) { notify("Erro ao enviar", "error"); }
-        };
-    </script>
-</body>
-</html>
+                    idade: document.getElementById('app-age').value, res
