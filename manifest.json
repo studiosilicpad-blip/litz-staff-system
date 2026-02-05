@@ -1,0 +1,15 @@
+{
+  "name": "Litz Staff System",
+  "short_name": "Litz Staff",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#0E0E13",
+  "theme_color": "#6C63FF",
+  "icons": [
+    {
+      "src": "https://cdn.discordapp.com/attachments/1468643402278244556/1468855987489472616/IMG_20260204_120240_455.webp?ex=69858a3d&is=698438bd&hm=b5a01313612ed38af36a998869e44494df2b5be0a4b556b2645e0b913dae63fc&",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
